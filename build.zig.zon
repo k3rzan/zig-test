@@ -61,7 +61,7 @@
         },
         .zphy = .{
             .url = "lib/zphy",
-            .hash = "12207c4d5f2fd6b3c4db4a2f0e462b05b4a2fec3480ff3f8f1d1be4ca08efb5bac12",
+            .hash = "12207b8c03eab0330f8b3a4c937ad634af457d55fe5c9c1e6bfe6f1b0d7809d47ba7",
         },
         .@"raylib-zig" = .{
             .url = "git+https://github.com/Not-Nik/raylib-zig#57041e707c06360808c9026f41c968c914e5415c",

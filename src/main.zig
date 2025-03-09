@@ -44,9 +44,13 @@ pub fn main() !void {
     const rectangle = zphy.RectangleShape().init(1.0, 2.0);
 
     var sample_body = zphy.RigidBody(zphy.RectangleShape()).init(rectangle, .{ .x = 1.0, .y = 1.0 });
-    var top_body = zphy.RigidBody(zphy.RectangleShape()).init(rectangle, .{ .x = 4.0, .y = -2.0 });
+    var top_body = zphy.RigidBody(zphy.RectangleShape()).init(rectangle, .{ .x = 4.0, .y = -5.0 });
     const rectangle_body = zphy.RigidBody(zphy.RectangleShape()).init(rectangle, .{ .x = 4.0, .y = 1.0 });
 
+    var another_body = zphy.RigidBody(zphy.RectangleShape()).init(rectangle, .{ .x = 8.0, .y = 5.0 });
+    const another_collider_body = zphy.RigidBody(zphy.RectangleShape()).init(rectangle, .{ .x = 2.0, .y = 5.0 });
+
+    another_body.setVelocity(.{ .x = -1.0, .y = 0.0 });
     sample_body.setVelocity(.{ .x = 1.0, .y = 0.0 });
     top_body.setVelocity(.{ .x = 0.0, .y = 1.0 });
 
@@ -59,6 +63,8 @@ pub fn main() !void {
     // world.draw_aabb = draw_aabb;
     world.draw_rectangle_shape = draw_rectangle;
 
+    try world.addRigidBody(.{ .rectangle = another_body });
+    try world.addRigidBody(.{ .rectangle = another_collider_body });
     try world.addRigidBody(.{ .rectangle = sample_body });
     try world.addRigidBody(.{ .rectangle = top_body });
     try world.addRigidBody(.{ .rectangle = rectangle_body });
@@ -80,6 +86,6 @@ pub fn main() !void {
         rl.clearBackground(rl.Color.white);
 
         world.draw();
-        world.step(1.0 / 120.0);
+        world.step(1.0 / 60.0);
     }
 }

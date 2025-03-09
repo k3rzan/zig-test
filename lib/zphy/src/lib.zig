@@ -871,6 +871,56 @@ fn getCollisionDisplacement(v1: Vec2, v2: Vec2, v3: Vec2, v4: Vec2) ?Vec2 {
     return null;
 }
 
+const Intersection = std.meta.Tuple(&.{ bool, Vec2 });
+
+fn getIntersection(b1: AnyRigidBody, b2: AnyRigidBody) Intersection {
+    const b1_pos = b1.rectangle.position;
+    const b2_pos = b2.rectangle.position;
+
+    const b1_center = b1.getActiveShapeCenter();
+    const b1_vertices = b1.getActiveShapeVertices();
+    const b2_vertices = b1.getActiveShapeVertices();
+
+    var displacement: Vec2 = undefined;
+    var has_intersected: bool = false;
+
+    if (b1_vertices) |r_vertices| {
+        if (b2_vertices) |c_vertices| {
+            for (r_vertices) |rv| {
+                for (c_vertices, 0..) |cv, j| {
+                    const index = @rem(j + 1, c_vertices.len);
+                    const next_cv = c_vertices[index];
+
+                    const v1: Vec2 = .{
+                        .x = b1_pos.x + b1_center.x,
+                        .y = b1_pos.y + b1_center.y,
+                    };
+                    const v2: Vec2 = .{
+                        .x = b1_pos.x + rv.x,
+                        .y = b1_pos.y + rv.y,
+                    };
+                    const v3: Vec2 = .{
+                        .x = b2_pos.x + cv.x,
+                        .y = b2_pos.y + cv.y,
+                    };
+
+                    const v4: Vec2 = .{
+                        .x = b2_pos.x + next_cv.x,
+                        .y = b2_pos.y + next_cv.y,
+                    };
+
+                    if (getCollisionDisplacement(v1, v2, v3, v4)) |d| {
+                        has_intersected = true;
+                        displacement.x += d.x;
+                        displacement.y += d.y;
+                    }
+                }
+            }
+        }
+    }
+    return Intersection{ has_intersected, displacement };
+}
+
 pub fn World() type {
     return struct {
         const Self = @This();
@@ -920,8 +970,6 @@ pub fn World() type {
                     const collider_aabb = collider.getActiveAABB();
 
                     if (receiver_aabb.max_x >= collider_aabb.min_x and receiver_aabb.min_y <= collider_aabb.max_y and receiver_aabb.max_y >= collider_aabb.min_y and receiver_aabb.min_x <= collider_aabb.max_x) {
-                        std.debug.print("\n", .{});
-                        std.debug.print("AABBs TOUCHING now idx:({d}) jdx: ({d})\n", .{ idx, jdx });
                         switch (collider) {
                             .circle => self.r_bodies.items[jdx].circle.aabb.is_colliding = true,
                             .rectangle => self.r_bodies.items[jdx].rectangle.aabb.is_colliding = true,
@@ -929,93 +977,31 @@ pub fn World() type {
                         is_colliding = true;
                         buffer.append(collider) catch std.debug.print("there's an error\n", .{});
 
-                        const receiver_pos = receiver.rectangle.position;
-                        const collider_pos = collider.rectangle.position;
+                        //this intersection is still far from being perfect, but works good enough for now
+                        const intersection = getIntersection(receiver, collider);
 
-                        const receiver_center = receiver.getActiveShapeCenter();
-                        const receiver_vertices = receiver.getActiveShapeVertices();
-                        const collider_vertices = receiver.getActiveShapeVertices();
+                        const has_intersected = intersection[0];
+                        const displacement = intersection[1];
 
-                        var is_intersected: bool = false;
-
-                        if (receiver_vertices) |r_vertices| {
-                            if (collider_vertices) |c_vertices| {
-                                for (r_vertices, 0..) |rv, i| {
-                                    if (is_intersected) break;
-
-                                    const next_rv = r_vertices[@rem(i + 1, r_vertices.len)];
-
-                                    for (c_vertices, 0..) |cv, j| {
-                                        const index = @rem(j + 1, c_vertices.len);
-                                        const next_cv = c_vertices[index];
-                                        //
-                                        const middle_rv = Vec2{
-                                            .x = (rv.x + next_rv.x) / 2.0,
-                                            .y = (rv.y + next_rv.y) / 2.0,
-                                        };
-
-                                        const v1: Vec2 = .{
-                                            .x = receiver_pos.x + receiver_center.x,
-                                            .y = receiver_pos.y + receiver_center.y,
-                                        };
-                                        const v2: Vec2 = .{
-                                            .x = receiver_pos.x + middle_rv.x,
-                                            .y = receiver_pos.y + middle_rv.y,
-                                        };
-                                        const v3: Vec2 = .{
-                                            .x = collider_pos.x + cv.x,
-                                            .y = collider_pos.y + cv.y,
-                                        };
-
-                                        const v4: Vec2 = .{
-                                            .x = collider_pos.x + next_cv.x,
-                                            .y = collider_pos.y + next_cv.y,
-                                        };
-
-                                        if (getCollisionDisplacement(v1, v2, v3, v4)) |displacement| {
-                                            is_intersected = true;
-
-                                            std.debug.print("is intersecting\n", .{});
-                                            std.debug.print("this is the displacement: ({d},{d})\n", .{ displacement.x, displacement.y });
-                                            switch (receiver) {
-                                                .circle => self.r_bodies.items[idx].circle.shape.is_colliding = true,
-                                                .rectangle => {
-                                                    std.debug.print("substracting position to the receiver\n", .{});
-                                                    self.r_bodies.items[idx].rectangle.shape.is_colliding = true;
-                                                },
-                                            }
-                                            switch (collider) {
-                                                .circle => self.r_bodies.items[jdx].circle.shape.is_colliding = true,
-                                                .rectangle => {
-                                                    self.r_bodies.items[jdx].rectangle.shape.is_colliding = true;
-                                                    self.r_bodies.items[jdx].rectangle.position.x -= displacement.x;
-                                                    self.r_bodies.items[jdx].rectangle.position.y -= displacement.y;
-                                                    self.r_bodies.items[jdx].rectangle.aabb.min_x -= displacement.x;
-                                                    self.r_bodies.items[jdx].rectangle.aabb.min_y -= displacement.y;
-                                                    self.r_bodies.items[jdx].rectangle.aabb.max_x -= displacement.x;
-                                                    self.r_bodies.items[jdx].rectangle.aabb.max_y -= displacement.y;
-                                                },
-                                            }
-                                            break;
-                                        } else {
-                                            is_intersected = false;
-                                            switch (receiver) {
-                                                .circle => self.r_bodies.items[idx].circle.shape.is_colliding = false,
-                                                .rectangle => self.r_bodies.items[idx].rectangle.shape.is_colliding = false,
-                                            }
-                                            switch (collider) {
-                                                .circle => self.r_bodies.items[jdx].circle.shape.is_colliding = false,
-                                                .rectangle => self.r_bodies.items[jdx].rectangle.shape.is_colliding = false,
-                                            }
-                                            std.debug.print("is NOT intersecting\n", .{});
-                                        }
-                                    }
-                                }
-                            }
+                        switch (receiver) {
+                            .circle => self.r_bodies.items[idx].circle.shape.is_colliding = has_intersected,
+                            .rectangle => {
+                                self.r_bodies.items[idx].rectangle.shape.is_colliding = has_intersected;
+                            },
+                        }
+                        switch (collider) {
+                            .circle => self.r_bodies.items[jdx].circle.shape.is_colliding = has_intersected,
+                            .rectangle => {
+                                self.r_bodies.items[jdx].rectangle.shape.is_colliding = has_intersected;
+                                self.r_bodies.items[jdx].rectangle.position.x -= displacement.x;
+                                self.r_bodies.items[jdx].rectangle.position.y -= displacement.y;
+                                self.r_bodies.items[jdx].rectangle.aabb.min_x -= displacement.x;
+                                self.r_bodies.items[jdx].rectangle.aabb.min_y -= displacement.y;
+                                self.r_bodies.items[jdx].rectangle.aabb.max_x -= displacement.x;
+                                self.r_bodies.items[jdx].rectangle.aabb.max_y -= displacement.y;
+                            },
                         }
                     } else {
-                        std.debug.print("\n", .{});
-                        std.debug.print("AABBs NOT touching idx:({d}) jdx: ({d})\n", .{ idx, jdx });
                         switch (collider) {
                             .circle => self.r_bodies.items[jdx].circle.aabb.is_colliding = false,
                             .rectangle => {
